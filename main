@@ -1,0 +1,429 @@
+import gspread
+import discord
+from oauth2client.service_account import ServiceAccountCredentials
+from discord.ext import commands
+from webserver import keep_alive
+import os
+# from pprint import pprint
+import time
+import music
+# import random
+
+# Google Sheets Stuff
+
+scope = ["HIDDEN"]
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+
+sheetClient = gspread.authorize(creds)
+
+rankingsSheet = sheetClient.open("BAPN Official Leaderboard").worksheet("Rankings")
+challengeLogsSheet = sheetClient.open("BAPN Official Leaderboard").worksheet("Challenge Logs")
+
+# Discord Stuff
+
+cogs = [music]
+
+class CustomHelpCommand(commands.HelpCommand):
+    def __init__(self):
+      super().__init__()
+
+    async def send_bot_help(self, mapping):
+      help_embed = discord.Embed(
+        title="Commands",
+        color=6559841
+      )
+      help_embed.add_field(name="```.ping```", value="*Use this to check the ping of the bot's server*", inline=True)
+      help_embed.add_field(name="```.challenge (Your Username) (Opponent Username)```", value="*Use this to challenge another player on the leaderboard*", inline=True)
+      help_embed.add_field(name="```.rankCheck (Username)```", value="*Use this to check a person's rank on the leaderboard*", inline=True)
+      help_embed.add_field(name="```.overseerCheck```", value="*Used to check if you are an Overseer*", inline=True)
+      help_embed.add_field(name="```.log (player1) (player2) (score)```", value="*Used to log completed officials\n\nThis can only be used by Overseers*", inline=True)
+      help_embed.add_field(name="```.cancel (player1) (player2)```", value="*Used to cancel challenges\n\nThis can only be used by Overseers*", inline=True)
+      help_embed.add_field(name="```.calculate (player1) (player2) (score)```", value="*Calculates the hypothetical points and positions of two players of the leaderboard*", inline=True)
+      
+      await self.get_destination().send(embed=help_embed)
+
+status = "please send .help"
+prefix = "."
+intents = discord.Intents.all()
+discordClient = commands.Bot(command_prefix=prefix, help_command=CustomHelpCommand(), intents=intents)
+
+for i in range(len(cogs)):
+  cogs[i].setup(discordClient)
+
+overseers = [
+    344872876199116802, # Dave
+    885207155941183519, # Poss
+    498154140116058123, # Sentrox
+    # 479432457775742989, # Tyrant
+    # 240219562623107073, # Pancakes
+    # 428022970548748289, # Xyphel
+    633711913066561536, # Charon
+    # 594321994678272000, # Palm
+    # 463442449898143766, # Half
+    # 484856866506014732, # Suit
+    835158077564256287, # Tav
+    894451789921931294, # Tanner
+    488349873050222602 # Joe
+]
+
+
+def insertChallengeLog(row):
+    freeRow = len(challengeLogsSheet.col_values(1)) + 1
+    challengeLogsSheet.insert_row(row, freeRow)
+    challengeLogsSheet.format("A2", {
+        "backgroundColor": {
+            "red": 0.956863,
+            "green": 0.8,
+            "blue": 0.8
+        }
+    })
+    challengeLogsSheet.format("B2", {
+        "backgroundColor": {
+            "red": 0.788235,
+            "green": 0.854902,
+            "blue": 0.972549
+        }
+    })
+    challengeLogsSheet.format("C2", {
+        "backgroundColor": {
+            "red": 0.85098,
+            "green": 0.917647,
+            "blue": 0.827451
+        }
+    })
+
+def eloFormula(SR1, SR2, score1, score2):
+  score1 = int(score1)
+  score2 = int(score2)
+  deltaWins = score1 - score2
+  SR1 = int(SR1)
+  SR2 = int(SR2)
+
+  #Calculates the SR change for both players
+  winFactor = .9 + ((abs(deltaWins) ** 1.489896102405) * .1) #Factors the score
+  #The ELOs
+  if (SR1-SR2) * deltaWins > 0:
+    eloFactor = abs((0-abs(SR2-SR1) + 500))  
+  else:
+    eloFactor = (abs(SR2-SR1) + 500)
+  srChange = winFactor * max(0, eloFactor) *.192  + 1 #times or plus an optional constant
+
+  if score1 == 5:
+    SR1 = SR1 + 15 + srChange
+    SR2 = SR2 - srChange
+  else:
+    SR2 = SR2 + 15 + srChange
+    SR1 = SR1 - srChange
+
+  return [int(round(SR1*10)/10), int(round(SR2*10)/10)]
+  
+
+@discordClient.event
+async def on_ready():
+  await discordClient.change_presence(status = discord.Status.online, activity=discord.Game(status))
+  print("Bot is ready.")
+
+
+@discordClient.command()
+async def ayuda(ctx):
+  help_embed = discord.Embed(
+    title="Comandos",
+    color=6559841
+  )
+  help_embed.add_field(name="```.ping```", value="Usa esto para mirar el ping del servidor donde se aloja el bot", inline=True)
+  help_embed.add_field(name="```.challenge (Tu nombre de usuario) (El nombre de usuario de tu enemigo)```", value="*Usa esto para retar a otro jugador de la clasificatoria*", inline=True)
+  help_embed.add_field(name="```.rankCheck (Nombre de usuario)```", value="*Usa esto para ver qué posición ocupa alguien en la clasificatoria*", inline=True)
+  help_embed.add_field(name="```overseerCheck```", value="*Usa esto para ver qué posición ocupa alguien en la clasificatoria*", inline=True)
+  help_embed.add_field(name="```.log (jugador1) (jugador2) (puntuación1) (puntiación2)```", value="Comando usado solo por Overseers para registrar batallas oficiales completadas.\n\nSolo los Overseers pueden usar este comando.", inline=True)
+  help_embed.add_field(name="```.cancel (jugador1) (jugador2)```", value="Comando usado para cancelar batallas oficiales.\n\nSolo los Overseers pueden usar este comando.", inline=True)
+  help_embed.add_field(name="```.calculate (jugador1) (jugador2) (puntuación1) (puntiación2)```", value="Calcula los puntos y las posiciones hipotéticos de dos jugadores de la clasificatoria", inline=True)
+  help_embed.set_footer(text="Traducido por Sentrox17")
+
+  await ctx.send(embed=help_embed)
+
+
+@discordClient.command()
+async def ping(ctx): 
+  await ctx.send(f"Pong! {round(discordClient.latency * 1000)}ms")
+
+
+@discordClient.command()
+async def overseerCheck(ctx):
+    isAnOverseer = False
+    for i in range(len(overseers)):
+      if overseers[i] == ctx.message.author.id:
+        isAnOverseer = True
+        await ctx.send("You are an Overseer :D")
+    if not isAnOverseer:
+      await ctx.send("You are not an Overseer :(")
+      return
+
+@discordClient.command()
+async def rankCheck(ctx, username):
+    rank = 0
+    players = rankingsSheet.col_values(3)
+    for i in range(len(players)):
+      if players[i] == username:
+        rank = rankingsSheet.cell(i+1, 2).value
+    
+    if rank != 0:
+      await ctx.send(f"{username}'s rank is #{rank}")
+    else:
+      await ctx.send(f"{username} is not on the leaderboard")
+
+@discordClient.command()
+async def challenge(ctx, your_username, opponent_username):
+    await ctx.send("Loading challenge request, could take up to 5 minutes...")
+
+    found_your_username = False
+    found_opponent_username = False
+    participants = rankingsSheet.col_values(3)
+    for i in range(len(participants)):
+        if participants[i] == your_username:
+            found_your_username = True
+        elif participants[i] == opponent_username:
+            found_opponent_username = True
+
+    timesHasChallenged = 0
+    challengers = challengeLogsSheet.col_values(1)
+    for i in range(len(challengers)):
+        if len(challengers) >= 100:
+            time.sleep(1)
+        if challengers[i] == your_username:
+            timesHasChallenged += 1
+
+    timesHasBeenChallenged = 0
+    timesChallengedInSeason = 0
+    challengedPlayers = challengeLogsSheet.col_values(2)
+    for i in range(len(challengedPlayers)):
+        if len(challengedPlayers) >= 100:
+            time.sleep(1)
+        if challengedPlayers[i] == opponent_username:
+            timesHasBeenChallenged += 1
+            if challengeLogsSheet.cell(i, 1).value == your_username:
+                timesChallengedInSeason += 1
+
+    def challengeChecks():
+        if found_your_username == True and found_opponent_username == True:
+            if timesHasChallenged < 5 and timesHasBeenChallenged < 3:
+                if timesChallengedInSeason < 2:
+                    return True
+                else:
+                    return False
+            else:
+                return False
+        else:
+            return False
+
+    if challengeChecks():
+        date = f'{time.localtime().tm_mon}/{time.localtime().tm_mday}/{time.localtime().tm_year}'
+        rowToInsert = [your_username, opponent_username, date]
+        insertChallengeLog(rowToInsert)
+        challengeEmbed = discord.Embed(
+          title="Your challenge has been logged!",
+          description=f"{your_username} has challenged {opponent_username}.",
+          color=65280
+        )
+        channelEmbed = discord.Embed(
+          title=(f'{ctx.message.author} has logged a challenge between {your_username} and '
+                              f'{opponent_username}'),
+          color=25855
+        )
+        channelEmbed.set_author(name=str(ctx.message.author), icon_url=ctx.message.author.avatar_url)
+        await ctx.send(embed=challengeEmbed)
+        logChannel = discordClient.get_channel(867247000390336542)
+        await logChannel.send(embed=channelEmbed)
+    else:
+        errorEmbed = discord.Embed(
+          title="An Error has Occurred",
+          description="The problem could be one of the following:",
+          color=16711680
+        )
+        errorEmbed.add_field(name="You are not on the leaderboard", value="*Ask Bagel_Seedz or Possible to put you on it*", inline=True)
+        errorEmbed.add_field(name="The person you challenged is not on the leaderboard", value="*Challenge somebody on the leaderboard*", inline=True)
+        errorEmbed.add_field(name="You have challenged the max of 5 people", value="*Finish your other challenges before challenging more people*", inline=True)
+        errorEmbed.add_field(name="The person you challenged has already been challenged the max of 3 times", value="*Wait for them to finish their challenges before challenging them*", inline=True)
+        errorEmbed.add_field(name="Another error has occurred", value="*Please contact Bagel_Seedz*", inline=True)
+        await ctx.send(embed=errorEmbed)
+
+
+@discordClient.command()
+async def log(ctx, player1, player2, score1, score2):
+    isAnOverseer = False
+    for i in range(len(overseers)):
+      if overseers[i] == ctx.message.author.id:
+        isAnOverseer = True
+    if not isAnOverseer:
+      await ctx.send("This command is only for overseers, sorry")
+      return
+
+    await ctx.send("Loading log request...")
+
+    SR1 = 0
+    SR2 = 0
+    participants = rankingsSheet.col_values(3)
+    for i in range(len(participants)):
+        if participants[i] == player1:
+            SR1 = int(rankingsSheet.cell(i+1, 4).value)
+        elif participants[i] == player2:
+            SR2 = int(rankingsSheet.cell(i+1, 4).value)
+
+    if SR1 == 0 or SR2 == 0:
+        await ctx.send("One or more of the players inputted are not on the leaderboard.")
+        return
+
+    # Calculates the SR change for both players (Programmed by Possible_NenUser)
+    SRValues = eloFormula(SR1, SR2, score1, score2)
+    SR1 = SRValues[0]
+    SR2 = SRValues[1]
+
+    # Update Leaderboard
+    for i in range(len(participants)):
+        if participants[i] == player1:
+            rankingsSheet.update_cell(i+1, 4, SR1)
+        elif participants[i] == player2:
+            rankingsSheet.update_cell(i+1, 4, SR2)
+    rankingsSheet.sort((4, 'des'))
+
+    participants = rankingsSheet.col_values(3)
+    newRank1 = 0
+    newRank2 = 0
+    for i in range(len(participants)):
+        if participants[i] == player1:
+            newRank1 = i
+        elif participants[i] == player2:
+            newRank2 = i
+
+    # Update Personal Sheets
+    personalSheet1 = sheetClient.open("BAPN Official Leaderboard").worksheet(player1)
+    personalSheet2 = sheetClient.open("BAPN Official Leaderboard").worksheet(player2)
+
+    freeRow1 = len(personalSheet1.col_values(1)) + 1
+    freeRow2 = len(personalSheet2.col_values(1)) + 1
+
+    stringScore1 = f'{score1}-{score2}'
+    stringScore2 = f'{score2}-{score1}'
+
+    rowToInsert1 = [player2, stringScore1, f'#{newRank1}', SR1]
+    rowToInsert2 = [player1, stringScore2, f'#{newRank2}', SR2]
+    personalSheet1.insert_row(rowToInsert1, freeRow1)
+    personalSheet2.insert_row(rowToInsert2, freeRow2)
+
+    personalSheet1.update_cell(1, 2, SR1)
+    personalSheet2.update_cell(1, 2, SR2)
+
+    # Update Challenge Logs
+    challengers = challengeLogsSheet.col_values(1)
+    defenders = challengeLogsSheet.col_values(2)
+    for i in range(len(challengers)):
+        if challengers[i] == player1 and defenders[i] == player2:
+            challengeLogsSheet.delete_row(i+1)
+        elif challengers[i] == player2 and defenders[i] == player1:
+            challengeLogsSheet.delete_row(i+1)
+    logEmbed = discord.Embed(
+      title=":white_check_mark: The results of this fight have been logged",
+      description="The leaderboard has been updated successfully.",
+      color=25855
+    )
+    logEmbed.add_field(name=player1, value=f"Rank: {newRank1}\nSR: {SR1}", inline=True)
+    logEmbed.add_field(name=player2, value=f"Rank: {newRank2}\nSR: {SR2}", inline=True)
+    await ctx.send(embed=logEmbed)
+
+
+@discordClient.command()
+async def cancel(ctx, player1, player2): 
+  isAnOverseer = False
+  for i in range(len(overseers)):
+    if overseers[i] == ctx.message.author.id:
+      isAnOverseer = True
+  if not isAnOverseer:
+    await ctx.send("This command is only for overseers, sorry")
+    return
+  
+  challengers = challengeLogsSheet.col_values(1)
+  defenders = challengeLogsSheet.col_values(2)
+  rowDeleted = False
+
+  for i in range(len(challengers)):
+      cancelEmbed = discord.Embed(
+        title=":white_check_mark: Challenge Cancelled.",
+        color=16776960
+      )
+      if challengers[i] == player1 and defenders[i] == player2:
+          challengeLogsSheet.delete_row(i+1)
+          rowDeleted = True
+          await ctx.send(embed=cancelEmbed)
+          break
+      elif challengers[i] == player2 and defenders[i] == player1:
+          challengeLogsSheet.delete_row(i+1)
+          rowDeleted = True
+          await ctx.send(embed=cancelEmbed)
+          break
+  if rowDeleted == False:
+    await ctx.send("Sorry, this challenge doesn't exist")
+
+
+@discordClient.command()
+async def calculate(ctx, player1, player2, score):
+  SR1 = 0
+  SR2 = 0
+  participants = rankingsSheet.col_values(3)
+  for i in range(len(participants)):
+      if participants[i] == player1:
+          SR1 = int(rankingsSheet.cell(i+1, 4).value)
+      elif participants[i] == player2:
+          SR2 = int(rankingsSheet.cell(i+1, 4).value)
+
+  if SR1 == 0 or SR2 == 0:
+      await ctx.send("One or more of the players inputted are not on the leaderboard.")
+      return
+
+  # Calculates the SR change for both players (Programmed by Possible_NenUser)
+  score1 = score[0]
+  score2 = score[2]
+  SRValues = eloFormula(SR1, SR2, score1, score2)
+  SR1 = SRValues[0]
+  SR2 = SRValues[1]
+
+  rank1 = 0
+  rank2 = 0
+  players = rankingsSheet.col_values(3)
+  for i in range(len(players)):
+    if players[i] == player1:
+      rank1 = int(rankingsSheet.cell(i+1, 2).value)
+    if players[i] == player2:
+      rank2 = int(rankingsSheet.cell(i+1, 2).value)
+
+  tp1 = None
+  tp2 = None
+  elos = rankingsSheet.col_values(4)
+  elos.pop(0)
+  elos.pop(rank1-1)
+  elos.pop(rank2-1)
+
+  for i in range(len(elos)):
+    if SR1 > int(elos[i]) and not tp1:
+      tp1 = i+1
+    if SR2 > int(elos[i]) and not tp2:
+      tp2 = i+1
+  
+  if SR1 < SR2:
+    tp1 += 1
+  elif SR1 > SR2:
+    tp2 += 1
+  
+  calcEmbed = discord.Embed(
+    title=f":pencil: Calculation of {player1} vs. {player2} | {score}",
+    description="*Hypothetical Calculation*",
+    color=255
+  )
+  calcEmbed.add_field(name=f"__{player1}__", value=f"Rank: {tp1}\nSR: {SR1}", inline=True)
+  calcEmbed.add_field(name=f"__{player2}__", value=f"Rank: {tp2}\nSR: {SR2}", inline=True)
+
+  await ctx.send(embed=calcEmbed)
+
+
+keep_alive()
+TOKEN = os.environ.get("DISCORD_BOT_SECRET")
+discordClient.run(TOKEN)
