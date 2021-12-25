@@ -13,7 +13,7 @@ import music
 
 scope = ["HIDDEN"]
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+creds = HIDDEN
 
 sheetClient = gspread.authorize(creds)
 
