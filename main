@@ -2,23 +2,40 @@ import gspread
 import discord
 from oauth2client.service_account import ServiceAccountCredentials
 from discord.ext import commands
+from discord_components import DiscordComponents, Button, ButtonStyle
 from webserver import keep_alive
 import os
 # from pprint import pprint
 import time
+import requests
+import json
+import asyncio
 import music
+import datetime
+from roblox import Client
 # import random
+
+
+# ROBLOX Stuff
+
+roClient = Client("SECRET SHHHH")
 
 # Google Sheets Stuff
 
-scope = ["HIDDEN"]
 
-creds = HIDDEN
+scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
 
 sheetClient = gspread.authorize(creds)
 
-rankingsSheet = sheetClient.open("BAPN Official Leaderboard").worksheet("Rankings")
-challengeLogsSheet = sheetClient.open("BAPN Official Leaderboard").worksheet("Challenge Logs")
+spreadsheet = sheetClient.open("BAPN Official Leaderboard")
+rankingsSheet = spreadsheet.worksheet("Rankings")
+challengeLogsSheet = spreadsheet.worksheet("Challenge Logs")
+exampleSheet = spreadsheet.worksheet("EXAMPLE")
+katanaTemplate = spreadsheet.worksheet("Katana Template")
+heavyTemplate = spreadsheet.worksheet("Heavy Template")
 
 # Discord Stuff
 
@@ -39,7 +56,11 @@ class CustomHelpCommand(commands.HelpCommand):
       help_embed.add_field(name="```.overseerCheck```", value="*Used to check if you are an Overseer*", inline=True)
       help_embed.add_field(name="```.log (player1) (player2) (score)```", value="*Used to log completed officials\n\nThis can only be used by Overseers*", inline=True)
       help_embed.add_field(name="```.cancel (player1) (player2)```", value="*Used to cancel challenges\n\nThis can only be used by Overseers*", inline=True)
-      help_embed.add_field(name="```.calculate (player1) (player2) (score)```", value="*Calculates the hypothetical points and positions of two players of the leaderboard*", inline=True)
+      help_embed.add_field(name="```.calculate (player1) (player2) (score)```", value="*Calculates the hypothetical points and positions of two players of the leaderboard*", inline=True),
+      help_embed.add_field(name="```.leaderboard```", value="*Use this to display the current Official Leaderboard Rankings*", inline=True)
+      help_embed.add_field(name="```.challenges```", value="*Use this to display all active challenges*")
+      help_embed.add_field(name="```.ayuda```", value="*Displays this command in spanish*", inline=True)
+      help_embed.add_field(name="```.addme```", value="*Use this to request to participate on the Official Leaderboard Rankings*", inline=True)
       
       await self.get_destination().send(embed=help_embed)
 
@@ -47,6 +68,7 @@ status = "please send .help"
 prefix = "."
 intents = discord.Intents.all()
 discordClient = commands.Bot(command_prefix=prefix, help_command=CustomHelpCommand(), intents=intents)
+DiscordComponents(discordClient)
 
 for i in range(len(cogs)):
   cogs[i].setup(discordClient)
@@ -64,7 +86,8 @@ overseers = [
     # 484856866506014732, # Suit
     835158077564256287, # Tav
     894451789921931294, # Tanner
-    488349873050222602 # Joe
+    # 488349873050222602 # Joe
+    745817231832907816 # Emanuelo
 ]
 
 
@@ -117,7 +140,25 @@ def eloFormula(SR1, SR2, score1, score2):
     SR1 = SR1 - srChange
 
   return [int(round(SR1*10)/10), int(round(SR2*10)/10)]
-  
+
+#async def infiniteLoop():
+#  while True:
+#    await asyncio.sleep(10)
+#    dateValues = challengeLogsSheet.col_values(3)
+#    if len(dateValues) < 2:
+#      continue
+
+#    for i in range(len(dateValues)):
+#      if dateValues[i] == "Date Issued":
+#        continue
+#      issuedDateList = dateValues[i].split("/")
+#      issuedDate = f"{issuedDateList[2]}-{issuedDateList[0]}-{issuedDateList[1]}"
+#      actualDate = datetime.date.fromisoformat(issuedDate)
+#      delta = datetime.timedelta(days=3)
+#      bigDate = actualDate + delta
+#      print(f"{issuedDate} // {str(datetime.date.today())}")
+
+#asyncio.ensure_future(infiniteLoop())
 
 @discordClient.event
 async def on_ready():
@@ -133,11 +174,12 @@ async def ayuda(ctx):
   )
   help_embed.add_field(name="```.ping```", value="Usa esto para mirar el ping del servidor donde se aloja el bot", inline=True)
   help_embed.add_field(name="```.challenge (Tu nombre de usuario) (El nombre de usuario de tu enemigo)```", value="*Usa esto para retar a otro jugador de la clasificatoria*", inline=True)
-  help_embed.add_field(name="```.rankCheck (Nombre de usuario)```", value="*Usa esto para ver qué posición ocupa alguien en la clasificatoria*", inline=True)
+  help_embed.add_field(name="```.rankCheck (Nombre de usuario)```", value="*Use esto para ver que posición ocupa alguien en la clasificatoria*", inline=True)
   help_embed.add_field(name="```overseerCheck```", value="*Usa esto para ver qué posición ocupa alguien en la clasificatoria*", inline=True)
   help_embed.add_field(name="```.log (jugador1) (jugador2) (puntuación1) (puntiación2)```", value="Comando usado solo por Overseers para registrar batallas oficiales completadas.\n\nSolo los Overseers pueden usar este comando.", inline=True)
   help_embed.add_field(name="```.cancel (jugador1) (jugador2)```", value="Comando usado para cancelar batallas oficiales.\n\nSolo los Overseers pueden usar este comando.", inline=True)
-  help_embed.add_field(name="```.calculate (jugador1) (jugador2) (puntuación1) (puntiación2)```", value="Calcula los puntos y las posiciones hipotéticos de dos jugadores de la clasificatoria", inline=True)
+  help_embed.add_field(name="```.calculate (jugador1) (jugador2) (puntuación1) (puntiación2)```", value="Calcula los puntos y las posiciones hipotéticos de dos jugadores de la clasificatoria", inline=True),
+  help_embed.add_field(name="```.leaderboard```", value="*Use esto para mostrar la tabla de clasificación*")
   help_embed.set_footer(text="Traducido por Sentrox17")
 
   await ctx.send(embed=help_embed)
@@ -217,12 +259,14 @@ async def challenge(ctx, your_username, opponent_username):
             return False
 
     if challengeChecks():
-        date = f'{time.localtime().tm_mon}/{time.localtime().tm_mday}/{time.localtime().tm_year}'
+        date = str(datetime.date.today())
         rowToInsert = [your_username, opponent_username, date]
         insertChallengeLog(rowToInsert)
+        challengedID = spreadsheet.worksheet(opponent_username).cell(3, 8).value
+
         challengeEmbed = discord.Embed(
           title="Your challenge has been logged!",
-          description=f"{your_username} has challenged {opponent_username}.",
+          description=f"{your_username} ({ctx.message.author.mention}) has challenged {opponent_username} (<@{challengedID}>)",
           color=65280
         )
         channelEmbed = discord.Embed(
@@ -234,6 +278,12 @@ async def challenge(ctx, your_username, opponent_username):
         await ctx.send(embed=challengeEmbed)
         logChannel = discordClient.get_channel(867247000390336542)
         await logChannel.send(embed=channelEmbed)
+        try:
+          user = discordClient.get_user(int(challengedID))
+          dm = await user.create_dm()
+          await dm.send(f"You have been challenged by {ctx.message.author.mention} ({your_username})! Please consider contacting them in order to schedule your fight.")
+        except:
+          return
     else:
         errorEmbed = discord.Embed(
           title="An Error has Occurred",
@@ -422,6 +472,244 @@ async def calculate(ctx, player1, player2, score):
   calcEmbed.add_field(name=f"__{player2}__", value=f"Rank: {tp2}\nSR: {SR2}", inline=True)
 
   await ctx.send(embed=calcEmbed)
+
+
+@discordClient.command()
+async def leaderboard(ctx):
+  rankCol = rankingsSheet.col_values(2)
+  playersCol = rankingsSheet.col_values(3)
+  srCol = rankingsSheet.col_values(4)
+
+  desc = ""
+  for i in range(len(playersCol)):
+    desc = f"{desc}\n**{rankCol[i]}.**   __{playersCol[i]}__  -  {srCol[i]}"
+
+  lbEmbed = discord.Embed(
+    title="BAPN OFFICIAL LEADERBOARD",
+    description=desc,
+    color=16766976
+  )
+  await ctx.send(embed=lbEmbed)
+
+
+@discordClient.command()
+async def challenges(ctx):
+  challengerCol = challengeLogsSheet.col_values(1)
+  challengedCol = challengeLogsSheet.col_values(2)
+  datesCol = challengeLogsSheet.col_values(3)
+
+  desc = ""
+  for i in range(len(challengerCol)):
+    desc = f"{desc}\n{challengerCol[i]} ⚔ {challengedCol[i]} **|** *{datesCol[i]}*"
+  
+  challengeEmbed = discord.Embed(
+    title="CHALLENGE LOGS 🗡",
+    description=desc,
+    color=38655
+  )
+  await ctx.send(embed=challengeEmbed)
+
+
+@discordClient.command()
+async def addme(ctx):
+  def __init__(self, client):
+    self.client = client
+    
+  avk = None
+  bio = None
+  weapon = None
+  startingSR = None
+  proofURL = None
+  verified = False
+
+  dm = await ctx.message.author.create_dm()
+  
+  def messageCheck(m):
+    return m.channel == dm and m.author.id == ctx.message.author.id
+  
+  def buttonCheck(b):
+    return b.channel == dm
+
+  await ctx.send("Check your dms!")
+  
+  roverUser = None
+  try:
+    roverR = requests.get(f"https://verify.eryn.io/api/user/{str(ctx.message.author.id)}")
+    roverParse = json.loads(roverR.text)
+    roverUser = roverParse["robloxUsername"]
+    verified = True
+  except:
+    await dm.send("It looks like you haven't been verified with RoVer. What is your full roblox username?")
+    tempRUser = await discordClient.wait_for("message", check=messageCheck, timeout=60.0)
+    try:
+      await roClient.get_user_by_username(tempRUser.content)
+      roverUser = tempRUser.content
+    except:
+      await dm.send("That roblox user does not exist. Please say \".addme\" and try again.")
+      return
+
+  playerPic = None
+  rUser = None
+  try:
+    rUserClient = await roClient.get_user_by_username(roverUser)
+    rUser = rUserClient.name
+    playerPicTuple = await roClient.thumbnails.get_user_avatar_thumbnails(users=[rUserClient.id], size="352x352")
+    playerPic = playerPicTuple[0].image_url
+  except:
+    await dm.send("ERROR: Contact Bagel_Seedz or Possible_NenUser to add you to the leaderboard manually.")
+    return
+
+  competitors = rankingsSheet.col_values(3)
+  for person in competitors:
+    if person == rUser:
+      await dm.send("You are already on the leaderboard.")
+      return
+
+  introEmbed = discord.Embed(
+    title="BAPN OFFICIAL LEADERBOARD APPLICATION",
+    description="This automated application process was created to allow new competitors to be augmented into the pro leaderboard easily. It is **required** that all compeitors familiarize themselves with the [Official 1v1 Rules](https://docs.google.com/document/d/1Y1fX6Cq-d5hKvxRsn2ShkVQiQ6tzY3Jzlv6iBrr3FtM/edit?usp=sharing) before applying. Click ``Continue`` if you are prepared to apply."
+  )
+  components = [
+    Button(style=ButtonStyle.gray, label="Continue")
+  ]
+  msg = await dm.send(embed=introEmbed, components=[components])
+  await discordClient.wait_for("button_click", check=buttonCheck)
+  await msg.edit(embed=introEmbed, components=[])
+
+  avkEmbed = discord.Embed(
+    title="Question 1",
+    description="What is your AVK?",
+    color=255
+  )
+  await dm.send(embed=avkEmbed)
+  res = await discordClient.wait_for("message", check=messageCheck, timeout=60.0)
+  try:
+    res = float(res.content)
+  except:
+    await dm.send("An error has occurred. The bot detected an invalid input. Please say ``.addme`` and try again with a valid AVK.")
+    return
+  if res < 50.0:
+    await dm.send("You do not have enough avk to rejoin the leaderboard. Please come back when you have ganed at least 50 avk.")
+    return
+  elif 50.0 <= res < 100.0:
+    startingSR = 4700
+  elif res >= 100.0:
+    startingSR = 5000
+  
+  avk = res
+
+  avkProofEmbed = discord.Embed(
+    title="AVK PROOF",
+    description="Please send IMAGE PROOF of your AVK INCLUDING the username on the in-game leaderboard at the top right corner. (Please attach an image and __not__ a link/url)",
+    color=255
+  )
+  avkProofEmbed.set_image(url="https://cdn.discordapp.com/attachments/718291713738670151/933913994337607690/azlinsavk.png")
+  await dm.send(embed=avkProofEmbed)
+  res = await discordClient.wait_for("message", check=messageCheck, timeout=300.0)
+  proofURL = res.attachments[0].url
+  
+  weaponEmbed = discord.Embed(
+    title="Question 2",
+    description="What weapon do you mainly use?",
+    color=65280
+  )
+  components = [
+    Button(style=ButtonStyle.red, label="Katana", custom_id="Katana"),
+    Button(style=ButtonStyle.blue, label="Heavy", custom_id="Heavy")
+  ]
+  msg = await dm.send(embed=weaponEmbed, components=[components])
+  res = await discordClient.wait_for("button_click", check=buttonCheck)
+  await msg.edit(embed=weaponEmbed, components=[])
+  weapon = res.component.custom_id
+
+  bioEmbed = discord.Embed(
+    title="Question 3",
+    description="What do you want your bio to be?",
+    color=0
+  )
+  await dm.send(embed=bioEmbed)
+  res = await discordClient.wait_for("message", check=messageCheck, timeout=300.0)
+  bio = res.content
+  
+  confirmationPrompt = discord.Embed(
+    title="BAPN LEADERBOARD APPLICATION",
+    description="Is all of this information correct? All of this information will be sent to the Head Overseers for approval.",
+    color=16776960
+  )
+  confirmationPrompt.add_field(name="__Username__", value=rUser, inline=True)
+  confirmationPrompt.add_field(name="__RoVer Verified__", value=verified, inline=True)
+  confirmationPrompt.add_field(name="__AVK__", value=f"{avk} (Your starting Skill Rating will be {startingSR})", inline=False)
+  confirmationPrompt.add_field(name="__Bio__", value=bio, inline=True)
+  confirmationPrompt.add_field(name="__Weapon__", value=weapon, inline=True)
+  confirmationPrompt.set_image(url=proofURL)
+  confirmationPrompt.set_thumbnail(url=str(playerPic))
+  confirmationPrompt.set_author(name=str(ctx.message.author), icon_url=ctx.message.author.avatar_url)
+  components = [
+    Button(style=ButtonStyle.green, label="Send", custom_id="yes"),
+    Button(style=ButtonStyle.red, label="Dont Send", custom_id="no")
+  ]
+  msg = await dm.send(embed=confirmationPrompt, components=[components])
+  res = await discordClient.wait_for("button_click", check=buttonCheck)
+  await msg.edit(embed=confirmationPrompt, components=[])
+  if res.component.custom_id == "yes":
+    await res.respond(content="Your response has been sent.")
+  elif res.component.custom_id == "no":
+    await res.respond(content="Your response has not been sent.")
+    return
+
+  applicationChannel = discordClient.get_channel(934093336816545902)
+  def modChannelCheck(b):
+    return b.channel.id == applicationChannel.id
+
+  newComponents = [
+    Button(style=ButtonStyle.green, label="Accept", custom_id="ye"),
+    Button(style=ButtonStyle.red, label="Deny", custom_id="nah")
+  ]
+  msg = await applicationChannel.send(embed=confirmationPrompt, components=[newComponents])
+  res = await discordClient.wait_for("button_click", check=modChannelCheck)
+  if res.component.custom_id == "ye":
+    await msg.edit(f"``Accepted by {str(res.author)}`` ", embed=confirmationPrompt, components=[])
+    await dm.send("You have been accepted into the pro leaderboard.")
+  elif res.component.custom_id == "nah":
+    await msg.edit(f"``Denied by {str(res.author)}``", embed=confirmationPrompt, components=[])
+    await dm.send("Sorry, your request has been denied. You have not been added to the leaderboard.")
+    return
+  
+  newWorksheet = None
+  if weapon == "Katana":
+    newWorksheet = spreadsheet.duplicate_sheet(1511070903, insert_sheet_index=0, new_sheet_name=rUser)
+  elif weapon == "Heavy":
+    newWorksheet = spreadsheet.duplicate_sheet(2115675779, insert_sheet_index=0, new_sheet_name=rUser)
+  worksheets = spreadsheet.worksheets()
+  sheetsToSort = []
+  for worksheet in worksheets:
+    sheetsToSort.append(worksheet.title)
+  sheetsToSort.sort()
+  newSheets = []
+  for i in range(len(sheetsToSort)):
+    for worksheet in worksheets:
+      if worksheet.title == "Rankings" or worksheet.title == "Challenge Logs" or worksheet.title == "EXAMPLE" or worksheet.title == "Katana Template" or worksheet.title == "Heavy Template":
+        continue
+      if sheetsToSort[i] == worksheet.title:
+        newSheets.append(worksheet)
+        break
+  newSheets.insert(0, rankingsSheet)
+  newSheets.insert(1, challengeLogsSheet)
+  newSheets.insert(2, exampleSheet)
+  newSheets.insert(3, katanaTemplate)
+  newSheets.insert(4, heavyTemplate)
+  spreadsheet.reorder_worksheets(newSheets)
+
+  newWorksheet.update_acell('A1',f'=HYPERLINK("#gid={newWorksheet.id}","{rUser}")')
+  newWorksheet.update_cell(1, 2, startingSR)
+  newWorksheet.update_cell(3, 2, bio)
+  newWorksheet.update_cell(3, 8, str(ctx.message.author.id))
+  newWorksheet.update_cell(3, 1, f'=image("{str(playerPic)}")')
+  
+  freeRow = len(rankingsSheet.col_values(3)) + 1
+  rankingsSheet.update_cell(freeRow, 3, f"={rUser}!A1")
+  rankingsSheet.update_cell(freeRow, 4, str(startingSR))
+  rankingsSheet.sort((4, 'des'))
 
 
 keep_alive()
