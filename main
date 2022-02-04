@@ -18,7 +18,7 @@ from roblox import Client
 
 # ROBLOX Stuff
 
-roClient = Client("SECRET SHHHH")
+roClient = Client("5C79D3C08951426B44F4B6A4A0AB3A4E4E6D1D9F40AFA03F08460B02F8F41AC890B4BCA3472081CE4EBB3062DDE7893D693B0F2063B749AF3E5E6AD7DBDF9FF826FD3DC36A0AD7604E54C371E872484504A9F1878652ABE41F17B3E5DD7F8DABB87449C0BAC7D99671DF5808FD90C3BBA6EE6305CBF8560E5DDA3BF61932C2C8408B4904B1D8093205A97DC416F741A307D1E2DBBABC6E7A0F227F87EBA698B44D9F1E21BCAD8A1075B8FDD384B2EB99B5DF768C185AE51624F393DCDEB38CCB65B6CFEC5ADDFFC04E1FACAC434147775020965D40AF04D7625DB560D8006CBD089FCAF6AF7CB0B76CDBDACF1B97F2DBFB2E3EBBA3FACF987C0C6662C699656E2C7DA79582B9AA61E4649A17E616A3EFD08ED5F442C67154F921187855DD914CCB511CA35CE2942ED9019B6DB542F4A296034F33A62BBC0BCC23116B16CE16A91C72831AB640A3E8F35FCE78619B5697A800E050")
 
 # Google Sheets Stuff
 
@@ -675,36 +675,43 @@ async def addme(ctx):
     await dm.send("Sorry, your request has been denied. You have not been added to the leaderboard.")
     return
   
-  newWorksheet = None
-  if weapon == "Katana":
-    newWorksheet = spreadsheet.duplicate_sheet(1511070903, insert_sheet_index=0, new_sheet_name=rUser)
-  elif weapon == "Heavy":
-    newWorksheet = spreadsheet.duplicate_sheet(2115675779, insert_sheet_index=0, new_sheet_name=rUser)
   worksheets = spreadsheet.worksheets()
-  sheetsToSort = []
+  alreadyHasSheet = False
   for worksheet in worksheets:
-    sheetsToSort.append(worksheet.title)
-  sheetsToSort.sort()
-  newSheets = []
-  for i in range(len(sheetsToSort)):
+    if worksheet.title == rUser:
+      alreadyHasSheet = True
+      
+  if not alreadyHasSheet:
+    newWorksheet = None
+    if weapon == "Katana":
+      newWorksheet = spreadsheet.duplicate_sheet(1511070903, insert_sheet_index=0, new_sheet_name=rUser)
+    elif weapon == "Heavy":
+      newWorksheet = spreadsheet.duplicate_sheet(2115675779, insert_sheet_index=0, new_sheet_name=rUser)
+    worksheets = spreadsheet.worksheets()
+    sheetsToSort = []
     for worksheet in worksheets:
-      if worksheet.title == "Rankings" or worksheet.title == "Challenge Logs" or worksheet.title == "EXAMPLE" or worksheet.title == "Katana Template" or worksheet.title == "Heavy Template":
-        continue
-      if sheetsToSort[i] == worksheet.title:
-        newSheets.append(worksheet)
-        break
-  newSheets.insert(0, rankingsSheet)
-  newSheets.insert(1, challengeLogsSheet)
-  newSheets.insert(2, exampleSheet)
-  newSheets.insert(3, katanaTemplate)
-  newSheets.insert(4, heavyTemplate)
-  spreadsheet.reorder_worksheets(newSheets)
+      sheetsToSort.append(worksheet.title)
+    sheetsToSort.sort()
+    newSheets = []
+    for i in range(len(sheetsToSort)):
+      for worksheet in worksheets:
+        if worksheet.title == "Rankings" or worksheet.title == "Challenge Logs" or worksheet.title == "EXAMPLE" or worksheet.title == "Katana Template" or worksheet.title == "Heavy Template":
+          continue
+        if sheetsToSort[i] == worksheet.title:
+          newSheets.append(worksheet)
+          break
+    newSheets.insert(0, rankingsSheet)
+    newSheets.insert(1, challengeLogsSheet)
+    newSheets.insert(2, exampleSheet)
+    newSheets.insert(3, katanaTemplate)
+    newSheets.insert(4, heavyTemplate)
+    spreadsheet.reorder_worksheets(newSheets)
 
-  newWorksheet.update_acell('A1',f'=HYPERLINK("#gid={newWorksheet.id}","{rUser}")')
-  newWorksheet.update_cell(1, 2, startingSR)
-  newWorksheet.update_cell(3, 2, bio)
-  newWorksheet.update_cell(3, 8, str(ctx.message.author.id))
-  newWorksheet.update_cell(3, 1, f'=image("{str(playerPic)}")')
+    newWorksheet.update_acell('A1',f'=HYPERLINK("#gid={newWorksheet.id}","{rUser}")')
+    newWorksheet.update_cell(1, 2, startingSR)
+    newWorksheet.update_cell(3, 2, bio)
+    newWorksheet.update_cell(3, 8, str(ctx.message.author.id))
+    newWorksheet.update_cell(3, 1, f'=image("{str(playerPic)}")')
   
   freeRow = len(rankingsSheet.col_values(3)) + 1
   rankingsSheet.update_cell(freeRow, 3, f"={rUser}!A1")
