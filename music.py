@@ -16,7 +16,7 @@ class music(commands.Cog):
     self.client = client
 
   global currentQueue
-  currentQueue = []
+  currentQueue = {}
 
   @commands.command()
   async def join(self, ctx):
@@ -37,10 +37,14 @@ class music(commands.Cog):
       await voice_channel.connect()
     else:
       await ctx.voice_client.move_to(voice_channel)
+
+    await ctx.voice_client.disconnect()
     
     global currentQueue
-    currentQueue = []
-    await ctx.voice_client.disconnect()
+    try:
+      currentQueue.pop(str(ctx.message.guild.id))
+    except:
+      return
 
   @commands.command()
   async def play(self, ctx):
@@ -62,10 +66,11 @@ class music(commands.Cog):
 
     async def myAfter():
       await asyncio.sleep(2)
-      currentQueue.pop(0)
-      if len(currentQueue) > 0:
+      guildQueue = currentQueue[str(ctx.message.guild.id)]
+      guildQueue.pop(0)
+      if len(guildQueue) > 0:
         with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-          info = currentQueue[0]
+          info = guildQueue[0]
           await ctx.send(f"Now Playing: **{info['title']}**")
           url2 = info['formats'][0]['url']
           source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
@@ -75,7 +80,13 @@ class music(commands.Cog):
       if url.find("list=") == -1:
         with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
           info = ydl.extract_info(url, download=False)
-          currentQueue.insert(len(currentQueue), info)
+          guildQueue = None
+          try:
+            guildQueue = currentQueue[str(ctx.message.guild.id)]
+          except:
+            currentQueue.update({str(ctx.message.guild.id):[]})
+            guildQueue = currentQueue[str(ctx.message.guild.id)]
+          guildQueue.insert(len(guildQueue), info)
           if not vc.is_playing():
             await ctx.send(f"Now Playing: **{info['title']}**")
             url2 = info['formats'][0]['url']
@@ -86,17 +97,30 @@ class music(commands.Cog):
       else:
         playlist = Playlist(f'{url}')
         playlist._video_regex = re.compile(r"\"url\":\"(/watch\?v=[\w-]*)")
+        msg = None
+        amtAdded = 0
         for pUrl in playlist.video_urls:
           with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(pUrl, download=False)
-            currentQueue.insert(len(currentQueue), info)
+            guildQueue = None
+            try:
+              guildQueue = currentQueue[str(ctx.message.guild.id)]
+            except:
+              currentQueue.update({str(ctx.message.guild.id):[]})
+              guildQueue = currentQueue[str(ctx.message.guild.id)]
+            guildQueue.insert(len(guildQueue), info)
             if not vc.is_playing():
               await ctx.send(f"Now Playing: **{info['title']}**")
               url2 = info['formats'][0]['url']
               source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
               vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(myAfter(), self.client.loop))
             else:
-              await ctx.send(f"Added ``{info['title']}`` to the queue.")
+              if not msg:
+                msg = await ctx.send(f"Added ``{info['title']}`` to the queue.")
+                amtAdded += 1
+              else:
+                await msg.edit(f"Added ``{info['title']}`` and *{amtAdded}* more to the queue.")
+                amtAdded += 1
     else:
       results = YoutubeSearch(url, max_results=1).to_json()
       resultsList = json.loads(results)
@@ -104,7 +128,13 @@ class music(commands.Cog):
       
       with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
         info = ydl.extract_info(newURL, download=False)
-        currentQueue.insert(len(currentQueue), info)
+        guildQueue = None
+        try:
+          guildQueue = currentQueue[str(ctx.message.guild.id)]
+        except:
+          currentQueue.update({str(ctx.message.guild.id):[]})
+          guildQueue = currentQueue[str(ctx.message.guild.id)]
+        guildQueue.insert(len(guildQueue), info)
         if not vc.is_playing():
           await ctx.send(f"Now Playing: **{info['title']}**")
           url2 = info['formats'][0]['url']
@@ -151,7 +181,10 @@ class music(commands.Cog):
     
     await ctx.send("Stopped.")
     global currentQueue
-    currentQueue = []
+    try:
+      currentQueue.pop(str(ctx.message.guild.id))
+    except:
+      return
     ctx.voice_client.stop()
 
   @commands.command()
@@ -165,14 +198,34 @@ class music(commands.Cog):
       await ctx.voice_client.move_to(voice_channel)
 
     global currentQueue
+    guildQueue = None
+    try:
+      guildQueue = currentQueue[str(ctx.message.guild.id)]
+    except:
+      await ctx.send("There is nothing in the queue.")
+      return
 
-    if len(currentQueue) != 0:
-      qString = "__CURRENT QUEUE__"
-      for i in range(len(currentQueue)):
-        obj = currentQueue[i]
+    qEmbed = discord.Embed(
+      title="__CURRENT QUEUE__",
+      color=16711680
+    )
+    
+    if len(guildQueue) != 0:
+      qString = ""
+      for i in range(len(guildQueue)):
+        obj = guildQueue[i]
         sAdd = f"``{i+1}.`` - {obj['title']}"
         qString = f"{qString}\n{sAdd}"
-      await ctx.send(qString)
+      try:
+        qEmbed.description = qString
+        await ctx.send(embed=qEmbed)
+      except:
+        try:
+          qEmbed.description = f"{qString[:4090]}..."
+          qEmbed.set_footer("Queue was too long to send so I sent as much as I could 😅")
+          await ctx.send(embed=qEmbed)
+        except:
+          await ctx.send("the queue was too long to send 💀")
     else:
       await ctx.send("There is nothing in the queue.")
   
@@ -192,33 +245,53 @@ class music(commands.Cog):
   @commands.command()
   async def shuffle(self, ctx):
     global currentQueue
-    if len(currentQueue) == 0:
+    guildQueue = None
+    try:
+      guildQueue = currentQueue[str(ctx.message.guild.id)]
+    except:
       await ctx.send("Theres nothing to shuffle. Add something to the queue with ``.play``")
+      return
+    if len(guildQueue) == 0:
+      await ctx.send("Theres nothing to shuffle. Add something to the queue with ``.play``")
+      return
     
-    currentSong = currentQueue[0]
-    currentQueue.pop(0)
-    currentQueue = random.sample(currentQueue, k=len(currentQueue))
-    currentQueue.insert(0, currentSong)
+    currentSong = guildQueue[0]
+    currentQueue[str(ctx.message.guild.id)].pop(0)
+    currentQueue[str(ctx.message.guild.id)] = random.sample(guildQueue, k=len(guildQueue))
+    currentQueue[str(ctx.message.guild.id)].insert(0, currentSong)
 
-    await ctx.send(f"Successfully shuffled {len(currentQueue)} songs.")
+    await ctx.send(f"Successfully shuffled {len(guildQueue)} songs.")
   
   @commands.command()
   async def clear(self, ctx):
     global currentQueue
-    currentQueue = []
+    guildQueue = None # Creating a new local variable wont work.
+    try:
+      guildQueue = currentQueue[str(ctx.message.guild.id)]
+    except:
+      await ctx.send("Theres nothing to clear.")
+      return
+    currentQueue[str(ctx.message.guild.id)] = []
     await ctx.send("Queue Cleared.")
     ctx.voice_client.stop()
   
   @commands.command()
   async def remove(self, ctx, index):
     global currentQueue
-    if len(currentQueue) == 0:
-      await ctx.send("Theres nothing to shuffle. Add something to the queue with ``.play``")
+    guildQueue = None # Creating a new local variable wont work.
+    try:
+      guildQueue = currentQueue[str(ctx.message.guild.id)]
+    except:
+      await ctx.send("Theres nothing to remove.")
+      return
+    if len(guildQueue) == 0:
+      await ctx.send("Theres nothing to remove.")
     
-    currentQueue.pop(int(index)-1)
+    currentQueue[str(ctx.message.guild.id)].pop(int(index)-1)
     if index == 1:
       ctx.voice_client.stop()
     await ctx.send(f"Removed song #{index} from the queue")
 
 def setup(client):
   client.add_cog(music(client))
+# https://youtu.be/jHZlvRr9KxM
