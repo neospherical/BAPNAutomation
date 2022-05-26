@@ -83,11 +83,14 @@ overseers = [
     633711913066561536, # Charon
     # 594321994678272000, # Palm
     # 463442449898143766, # Half
-    # 484856866506014732, # Suit
+    484856866506014732, # Suit
     835158077564256287, # Tav
-    894451789921931294, # Tanner
-    # 488349873050222602 # Joe
-    745817231832907816 # Emanuelo
+    # 894451789921931294, # Tanner
+    # 488349873050222602, # Joe
+    745817231832907816, # Emanuelo
+    581117906906251272, # Ghost
+    356661412686331904, # Potat
+    585157724224880675 # Jheerio
 ]
 
 
@@ -160,10 +163,9 @@ def eloFormula(SR1, SR2, score1, score2):
 
 #asyncio.ensure_future(infiniteLoop())
 
-@discordClient.event
-async def on_ready():
-  await discordClient.change_presence(status = discord.Status.online, activity=discord.Game(status))
-  print("Bot is ready.")
+#@discordClient.event
+#async def on_ready():
+#  print("Bot is ready.")
 
 
 @discordClient.command()
@@ -193,6 +195,9 @@ async def ping(ctx):
 @discordClient.command()
 async def overseerCheck(ctx):
     isAnOverseer = False
+    guilds = discordClient.guilds
+    print(len(guilds))
+    await discordClient.change_presence(status = discord.Status.online, activity=discord.Game(status))
     for i in range(len(overseers)):
       if overseers[i] == ctx.message.author.id:
         isAnOverseer = True
@@ -334,7 +339,10 @@ async def log(ctx, player1, player2, score1, score2):
             rankingsSheet.update_cell(i+1, 4, SR1)
         elif participants[i] == player2:
             rankingsSheet.update_cell(i+1, 4, SR2)
-    rankingsSheet.sort((4, 'des'))
+    try:
+      rankingsSheet.sort((4, 'des'))
+    except:
+      print("failed to sort for some reason?")
 
     participants = rankingsSheet.col_values(3)
     newRank1 = 0
@@ -712,7 +720,11 @@ async def addme(ctx):
     newWorksheet.update_cell(3, 2, bio)
     newWorksheet.update_cell(3, 8, str(ctx.message.author.id))
     newWorksheet.update_cell(3, 1, f'=image("{str(playerPic)}")')
-  
+  else:
+    sheet = spreadsheet.worksheet(rUser)
+    oldSR = int(sheet.cell(1, 2).value)
+    startingSR = oldSR
+    
   freeRow = len(rankingsSheet.col_values(3)) + 1
   rankingsSheet.update_cell(freeRow, 3, f"={rUser}!A1")
   rankingsSheet.update_cell(freeRow, 4, str(startingSR))
