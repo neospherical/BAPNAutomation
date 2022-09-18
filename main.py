@@ -855,6 +855,58 @@ async def addme(ctx):
 
 
     continueButton.callback = onContinue
+         
+         
+@discordClient.command()
+async def SeasonEloSoftReset(ctx, season_number):
+    user = ctx.message.author
+    if not (user.id == 344872876199116802 or user.id == 819989575215874148):  # If the author is Poss or Dave
+        await ctx.channel.send("Sorry, this command can only be run by Head Overseers.")
+        return
+
+    try:
+        int(season_number)
+    except:
+        await ctx.channel.send("The Season Number must be an integer.")
+        return
+    
+    msg = await ctx.channel.send("``Soft Reset Loading ...``")
+    
+    playersCol = rankingsSheet.col_values(3)
+    for i in range(len(playersCol)):
+        try:
+            currentSR = int(rankingsSheet.cell(i+1, 4).value)
+            newSR = round((currentSR + 5000)/2)
+            rankingsSheet.update_cell(i+1, 4, str(newSR))
+
+            personalSheet = sheetClient.open("BAPN Official Leaderboard").worksheet(playersCol[i])
+            personalSheet.update_cell(1, 2, str(newSR))
+
+            def getEnding(number):
+                mod10 = int(number) % 10
+                if number == 11 or number == 12 or number == 13: return "th"
+                if mod10 == 1: return "st"
+                if mod10 == 2: return "nd"
+                if mod10 == 3: return "rd"
+                return "th"
+            personalSheet.update_cell(3, 6, f"{personalSheet.cell(3, 6).value}\nSeason {season_number} - {i}{getEnding(i)} place")
+
+            firstCol = personalSheet.col_values(1)
+            rowValue = len(firstCol)+1
+            personalSheet.merge_cells(f"A{rowValue}:C{rowValue}")
+            personalSheet.update_cell(rowValue, 1, f"SEASON {season_number}")
+            personalSheet.update_cell(rowValue, 4, str(newSR))
+        except:
+            continue
+
+    await msg.edit(content="``SOFT ELO RESET COMPLETE``")
+
+
+
+    
+#keep_alive()
+TOKEN = "ODY3MjIwNDgwMTQxMTY0NTY1.GJCgWD.iYLIk6QB0c9YbXC3CLGSxUxRE_BhtriiA3P_gU"
+discordClient.run(TOKEN)
 #keep_alive()
 TOKEN = "YOUR DISCORD BOT TOKEN"
 discordClient.run(TOKEN)
