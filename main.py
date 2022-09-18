@@ -904,9 +904,7 @@ async def SeasonEloSoftReset(ctx, season_number):
 
 
     
-#keep_alive()
-TOKEN = "ODY3MjIwNDgwMTQxMTY0NTY1.GJCgWD.iYLIk6QB0c9YbXC3CLGSxUxRE_BhtriiA3P_gU"
-discordClient.run(TOKEN)
+
 #keep_alive()
 TOKEN = "YOUR DISCORD BOT TOKEN"
 discordClient.run(TOKEN)
