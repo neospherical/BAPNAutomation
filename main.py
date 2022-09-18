@@ -1,3 +1,4 @@
+#Python 3.9 highly recommended
 import gspread
 import discord
 from oauth2client.service_account import ServiceAccountCredentials
