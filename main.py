@@ -452,7 +452,7 @@ async def cancel(ctx, *players):
             player1, player2 = players[0], players[2]
         case _:
             # .cancel Bagel_Seedz Possible_NenUser Balls Clan ...
-            await.ctx.send("Sorry, you did not input the players correctly.")
+            await ctx.send("Sorry, you did not input the players correctly.")
             return
 
     for i in range(len(challengers)):
