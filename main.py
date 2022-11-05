@@ -437,10 +437,6 @@ async def cancel(ctx, *players):
             # .cancel
             await ctx.send("Sorry, you have not inputted any players.")
             return
-        case 1:
-            # .cancel Bagel_Seedz
-            await ctx.send("Sorry, you have inputted only 1 player.")
-            return
         case 2:
             # .cancel Bagel_Seedz Possible_NenUser
             player1, player2 = players
@@ -451,6 +447,7 @@ async def cancel(ctx, *players):
             # .cancel Bagel_Seedz ⚔ Possible_NenUser | 2022-09-18
             player1, player2 = players[0], players[2]
         case _:
+            # .cancel Bagel_Seedz
             # .cancel Bagel_Seedz Possible_NenUser Balls Clan ...
             await ctx.send("Sorry, you did not input the players correctly.")
             return
