@@ -418,7 +418,7 @@ async def log(ctx, player1, player2, score1, score2):
     await ctx.send(embed=logEmbed)
 
 @discordClient.command()
-async def cancel(ctx, player1, player2):
+async def cancel(ctx, *players):
     isAnOverseer = False
     for i in range(len(overseers)):
         if overseers[i] == ctx.message.author.id:
@@ -430,6 +430,30 @@ async def cancel(ctx, player1, player2):
     challengers = challengeLogsSheet.col_values(1)
     defenders = challengeLogsSheet.col_values(2)
     rowDeleted = False
+    
+    player1, player2 = [None]*2 # :0
+    match len(players):
+        case 0:
+            # .cancel
+            await ctx.send("Sorry, you have not inputted any players.")
+            return
+        case 1:
+            # .cancel Bagel_Seedz
+            await ctx.send("Sorry, you have inputted only 1 player.")
+            return
+        case 2:
+            # .cancel Bagel_Seedz Possible_NenUser
+            player1, player2 = players
+        case 3:
+            # .cancel Bagel_Seedz ⚔ Possible_NenUser
+            player1, player2 = players[0], players[2]
+        case 5:
+            # .cancel Bagel_Seedz ⚔ Possible_NenUser | 2022-09-18
+            player1, player2 = players[0], players[2]
+        case _:
+            # .cancel Bagel_Seedz Possible_NenUser Balls Clan ...
+            await.ctx.send("Sorry, you did not input the players correctly.")
+            return
 
     for i in range(len(challengers)):
         cancelEmbed = discord.Embed(
